@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>구구단 두더지 잡기 (난이도 하)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Jua&display=swap');
+        
+        body {
+            font-family: 'Jua', sans-serif;
+            background-color: #dcfce3; /* 연한 잔디밭 색상 */
+            margin: 0;
+            padding: 0;
+            overflow: hidden; /* 스크롤 방지 */
+            touch-action: none;
+            user-select: none;
+        }
+
+        /* 팝 애니메이션 (시작/결과 화면용) */
+        .pop {
+            animation: pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @keyframes pop {
+            0% { transform: scale(0.5); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* 오답 시 화면 흔들림 효과 */
+        .shake {
+            animation: shake 0.3s ease-in-out;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px) rotate(-1deg); }
+            75% { transform: translateX(5px) rotate(1deg); }
+        }
+
+        /* 마우스 커서를 뿅망치 모양으로 변경 (PC 환경) */
+        .game-area {
+            cursor: none; /* 기본 마우스를 숨기고 커스텀 뿅망치를 씁니다 */
+        }
+        
+        /* 커스텀 뿅망치 */
+        #custom-hammer {
+            position: fixed;
+            width: 130px;
+            height: 130px;
+            pointer-events: none; /* 클릭을 방해하지 않음 */
+            z-index: 9999;
+            transform-origin: 50% 80%; /* 망치의 손잡이 부분을 축으로 설정 */
+            transition: transform 0.08s ease-out;
+            transform: translate(-40%, -40%) rotate(25deg); /* 기본적으로 살짝 기울어진 상태 */
+            display: none; /* 게임 시작 전에는 숨김 */
+        }
+        
+        /* 뿅망치 내리치기 애니메이션 클래스 */
+        #custom-hammer.strike {
+            transform: translate(-40%, -40%) rotate(-45deg); /* 클릭 시 앞으로 확 기울어짐 */
+        }
+
+        /* 텍스트 팝업 (정답/오답) 애니메이션 */
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -150%) scale(1.3); }
+        }
+        
+        .mole-wrapper {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            background-color: #4ade80; /* 잔디 배경 */
+            border-radius: 1.5rem;
+            overflow: hidden;
+            border-bottom: 8px solid #166534;
+            box-shadow: inset 0 4px 6px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+        }
+
+        .hole-bg {
+            position: absolute;
+            bottom: 10%;
+            width: 80%;
+            height: 30%;
+            background-color: #064e3b; /* 어두운 구멍 색 */
+            border-radius: 50%;
+            z-index: 1;
+        }
+
+        .mole {
+            position: absolute;
+            bottom: 10%;
+            width: 65%;
+            height: 75%;
+            background-color: #8B4513; /* 두더지 갈색 */
+            border-top-left-radius: 50px;
+            border-top-right-radius: 50px;
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 15px;
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), filter 0.3s;
+            /* 기본적으로 아래로 숨어있음 */
+            transform: translateY(120%); 
+        }
+
+        /* 두더지가 튀어나왔을 때 클래스 */
+        .mole.up {
+            transform: translateY(0);
+        }
+
+        /* 정답 맞혔을 때 효과 */
+        .mole.correct {
+            background-color: #3b82f6; /* 파란색으로 변함 */
+            transform: translateY(-10%); /* 살짝 더 위로 뜀 */
+        }
+
+        .grass-fg {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 15%;
+            background-color: #22c55e;
+            z-index: 3;
+            border-radius: 0 0 1.5rem 1.5rem;
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center w-screen h-screen relative">
+
+    <!-- 커스텀 뿅망치 추가 -->
+    <div id="custom-hammer">
+        <!-- 빨간색 뿅망치 SVG 그래픽 -->
+        <svg width="100%" height="100%" viewBox="0 0 100 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- 회색 손잡이 -->
+            <rect x="42" y="45" width="16" height="70" rx="8" fill="#d1d5db" stroke="#1f2937" stroke-width="3"/>
+            <line x1="46" y1="52" x2="46" y2="108" stroke="#f3f4f6" stroke-width="3" stroke-linecap="round"/>
+            <!-- 손잡이 연결부 -->
+            <rect x="39" y="40" width="22" height="10" rx="2" fill="#9ca3af" stroke="#1f2937" stroke-width="3"/>
+            
+            <!-- 왼쪽 주름(아코디언) 부분 -->
+            <ellipse cx="12" cy="30" rx="6" ry="13" fill="#ef4444" stroke="#1f2937" stroke-width="3"/>
+            <ellipse cx="20" cy="30" rx="6" ry="16" fill="#ef4444" stroke="#1f2937" stroke-width="3"/>
+            <ellipse cx="28" cy="30" rx="6" ry="19" fill="#ef4444" stroke="#1f2937" stroke-width="3"/>
+
+            <!-- 오른쪽 주름(아코디언) 부분 -->
+            <ellipse cx="88" cy="30" rx="6" ry="13" fill="#ef4444" stroke="#1f2937" stroke-width="3"/>
+            <ellipse cx="80" cy="30" rx="6" ry="16" fill="#ef4444" stroke="#1f2937" stroke-width="3"/>
+            <ellipse cx="72" cy="30" rx="6" ry="19" fill="#ef4444" stroke="#1f2937" stroke-width="3"/>
+
+            <!-- 중앙 타격부 -->
+            <rect x="28" y="10" width="44" height="40" rx="4" fill="#ef4444" stroke="#1f2937" stroke-width="3"/>
+            <!-- 플라스틱 광택 효과 -->
+            <line x1="34" y1="18" x2="66" y2="18" stroke="#fca5a5" stroke-width="4" stroke-linecap="round"/>
+            <line x1="34" y1="26" x2="66" y2="26" stroke="#b91c1c" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+    </div>
+
+    <div class="absolute top-10 left-10 text-white opacity-80 z-0">
+        <svg width="100" height="60" viewBox="0 0 24 24" fill="white"><path d="M17.5 19c-2.5 0-4.5-2-4.5-4.5 0-.2.02-.4.05-.6C11.8 14 10.5 15 9 15c-2.2 0-4-1.8-4-4s1.8-4 4-4c.4 0 .8.1 1.1.2C11.5 5.3 13.6 4 16 4c3.3 0 6 2.7 6 6 0 .4-.04.7-.1 1.1C23.1 11.6 24 13.2 24 15c0 2.2-1.8 4-4 4h-2.5z"/></svg>
+    </div>
+    <div class="absolute top-32 right-10 text-white opacity-60 z-0">
+        <svg width="80" height="50" viewBox="0 0 24 24" fill="white"><path d="M17.5 19c-2.5 0-4.5-2-4.5-4.5 0-.2.02-.4.05-.6C11.8 14 10.5 15 9 15c-2.2 0-4-1.8-4-4s1.8-4 4-4c.4 0 .8.1 1.1.2C11.5 5.3 13.6 4 16 4c3.3 0 6 2.7 6 6 0 .4-.04.7-.1 1.1C23.1 11.6 24 13.2 24 15c0 2.2-1.8 4-4 4h-2.5z"/></svg>
+    </div>
+
+    <div id="app-container" class="relative w-full max-w-lg h-full max-h-[850px] flex flex-col z-10 p-4">
+        
+        <div id="start-screen" class="absolute inset-0 flex flex-col items-center justify-center bg-white/95 backdrop-blur-sm z-50 rounded-3xl shadow-2xl m-4 pop">
+            <div class="text-6xl mb-4">🐹🔨</div>
+            <h1 class="text-4xl text-green-700 mb-4 drop-shadow-sm text-center leading-tight">두더지 잡기<br><span class="text-3xl text-blue-600">3단, 6단 연습!</span></h1>
+            <p class="text-xl text-gray-700 mb-2 font-bold bg-yellow-100 px-4 py-2 rounded-xl">난이도 : 하 (시간 제한 없음)</p>
+            <p class="text-lg text-gray-600 mb-8 text-center px-6">
+                정답을 들고 있는 두더지를 뿅망치로 때려주세요!<br>
+                <span class="text-red-500 text-base">틀려도 다시 때릴 수 있어요 😉 (총 20문제)</span>
+            </p>
+            <button onclick="startGame()" class="bg-green-500 hover:bg-green-400 text-white text-3xl px-12 py-5 rounded-full shadow-[0_6px_0_#166534] active:shadow-[0_0px_0_#166534] active:translate-y-[6px] transition-all">
+                출발~ 🚀
+            </button>
+        </div>
+
+        <div id="play-screen" class="hidden flex-col h-full game-area relative">
+            <!-- 상단 상태바 -->
+            <div class="bg-white/90 p-4 rounded-3xl shadow-sm mb-6 flex justify-between items-center z-20">
+                <div class="text-2xl font-bold text-gray-700">
+                    문제: <span id="q-current" class="text-green-600 text-3xl">1</span> / 20
+                </div>
+                <div class="text-2xl font-bold text-gray-700">
+                    점수: <span id="score-display" class="text-blue-600 text-3xl">0</span>
+                </div>
+            </div>
+
+            <!-- 문제 표시 영역 -->
+            <div class="w-full flex justify-center mb-8 z-20">
+                <div class="bg-yellow-100 border-4 border-yellow-400 text-5xl text-yellow-800 px-10 py-5 rounded-3xl shadow-lg pop" id="question-display">
+                    3 x 4 = ?
+                </div>
+            </div>
+
+            <!-- 2x2 두더지 구멍 그리드 -->
+            <div class="grid grid-cols-2 gap-4 sm:gap-6 w-full flex-1 max-h-[500px] z-20">
+                <!-- 구멍 0 -->
+                <div class="mole-wrapper" onclick="hitMole(0, event)">
+                    <div class="hole-bg"></div>
+                    <div id="mole-0" class="mole">
+                        <div class="flex space-x-3 mb-2">
+                            <div class="w-2.5 h-2.5 bg-black rounded-full"></div>
+                            <div class="w-2.5 h-2.5 bg-black rounded-full"></div>
+                        </div>
+                        <div class="w-4 h-2.5 bg-pink-400 rounded-full mb-2"></div>
+                        <div class="bg-white px-4 py-1.5 rounded-xl shadow font-bold text-3xl text-gray-800" id="mole-text-0">0</div>
+                    </div>
+                    <div class="grass-fg"></div>
+                </div>
+                <!-- 구멍 1 -->
+                <div class="mole-wrapper" onclick="hitMole(1, event)">
+                    <div class="hole-bg"></div>
+                    <div id="mole-1" class="mole">
+                        <div class="flex space-x-3 mb-2">
+                            <div class="w-2.5 h-2.5 bg-black rounded-full"></div>
+                            <div class="w-2.5 h-2.5 bg-black rounded-full"></div>
+                        </div>
+                        <div class="w-4 h-2.5 bg-pink-400 rounded-full mb-2"></div>
+                        <div class="bg-white px-4 py-1.5 rounded-xl shadow font-bold text-3xl text-gray-800" id="mole-text-1">0</div>
+                    </div>
+                    <div class="grass-fg"></div>
+                </div>
+                <!-- 구멍 2 -->
+                <div class="mole-wrapper" onclick="hitMole(2, event)">
+                    <div class="hole-bg"></div>
+                    <div id="mole-2" class="mole">
+                        <div class="flex space-x-3 mb-2">
+                            <div class="w-2.5 h-2.5 bg-black rounded-full"></div>
+                            <div class="w-2.5 h-2.5 bg-black rounded-full"></div>
+                        </div>
+                        <div class="w-4 h-2.5 bg-pink-400 rounded-full mb-2"></div>
+                        <div class="bg-white px-4 py-1.5 rounded-xl shadow font-bold text-3xl text-gray-800" id="mole-text-2">0</div>
+                    </div>
+                    <div class="grass-fg"></div>
+                </div>
+                <!-- 구멍 3 -->
+                <div class="mole-wrapper" onclick="hitMole(3, event)">
+                    <div class="hole-bg"></div>
+                    <div id="mole-3" class="mole">
+                        <div class="flex space-x-3 mb-2">
+                            <div class="w-2.5 h-2.5 bg-black rounded-full"></div>
+                            <div class="w-2.5 h-2.5 bg-black rounded-full"></div>
+                        </div>
+                        <div class="w-4 h-2.5 bg-pink-400 rounded-full mb-2"></div>
+                        <div class="bg-white px-4 py-1.5 rounded-xl shadow font-bold text-3xl text-gray-800" id="mole-text-3">0</div>
+                    </div>
+                    <div class="grass-fg"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="result-screen" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-white/95 backdrop-blur-sm z-50 rounded-3xl shadow-2xl m-4">
+            <h2 class="text-5xl text-gray-800 mb-4">참 잘했어요! 🎉</h2>
+            <p class="text-2xl text-gray-600 mb-4">20문제 모두 완료!</p>
+            <div class="bg-blue-50 p-6 rounded-3xl border-2 border-blue-200 mb-8 w-4/5 text-center">
+                <p class="text-lg text-gray-500 mb-1">최종 점수</p>
+                <div class="text-6xl text-blue-600 font-bold pop" id="final-score">0</div>
+            </div>
+            <button onclick="resetToStart()" class="bg-blue-500 hover:bg-blue-400 text-white text-3xl px-10 py-5 rounded-full shadow-[0_6px_0_#1d4ed8] active:shadow-[0_0px_0_#1d4ed8] active:translate-y-[6px] transition-all">
+                다시 하기 🔄
+            </button>
+        </div>
+
+    </div>
+
+    <script>
+        // DOM 요소
+        const screens = {
+            start: document.getElementById('start-screen'),
+            play: document.getElementById('play-screen'),
+            result: document.getElementById('result-screen')
+        };
+        const els = {
+            qCurrent: document.getElementById('q-current'),
+            score: document.getElementById('score-display'),
+            question: document.getElementById('question-display'),
+            finalScore: document.getElementById('final-score')
+        };
+        const hammer = document.getElementById('custom-hammer');
+
+        function updateHammerPosition(e) {
+            if (screens.play.classList.contains('hidden')) return;
+            
+            let clientX, clientY;
+            if (e.type.includes('touch')) {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            } else {
+                clientX = e.clientX;
+                clientY = e.clientY;
+            }
+            hammer.style.left = clientX + 'px';
+            hammer.style.top = clientY + 'px';
+        }
+
+        // 뿅망치 내리치기 효과
+        function strikeHammer() {
+            if (screens.play.classList.contains('hidden')) return;
+            hammer.classList.add('strike');
+            setTimeout(() => hammer.classList.remove('strike'), 100);
+        }
+
+        // 이벤트 리스너 등록
+        window.addEventListener('mousemove', updateHammerPosition);
+        window.addEventListener('mousedown', strikeHammer);
+        window.addEventListener('touchstart', (e) => {
+            updateHammerPosition(e);
+            strikeHammer();
+        }, {passive: false});
+
+        // 게임 상태 변수
+        const MAX_QUESTIONS = 20;
+        let currentQuestion = 1;
+        let score = 0;
+        let currentAnswer = 0;
+        let isProcessing = false; // 정답 처리 중 클릭 방지
+        let activeMoles = [true, true, true, true]; // 각 두더지가 현재 때릴 수 있는 상태인지
+
+        // 문제 및 두더지 생성 함수
+        function generateQuestion() {
+            // 3단 또는 6단
+            const dans = [3, 6];
+            const dan = dans[Math.floor(Math.random() * dans.length)];
+            const num = Math.floor(Math.random() * 9) + 1;
+            currentAnswer = dan * num;
+
+            // 문제 텍스트 갱신 애니메이션
+            els.question.innerText = `${dan} x ${num} = ?`;
+            els.question.classList.remove('pop');
+            void els.question.offsetWidth; // 리플로우
+            els.question.classList.add('pop');
+
+            // 1개의 정답과 3개의 오답 생성
+            let answers = [currentAnswer];
+            while (answers.length < 4) {
+                // 단수만큼 차이나는 헷갈리는 오답 만들기
+                let offset = (Math.floor(Math.random() * 4) + 1) * dan;
+                let wrong = Math.random() > 0.5 ? currentAnswer + offset : currentAnswer - offset;
+                if (wrong > 0 && !answers.includes(wrong)) {
+                    answers.push(wrong);
+                }
+            }
+
+            // 배열 무작위 섞기
+            answers.sort(() => Math.random() - 0.5);
+
+            // 두더지에게 숫자 배정 및 나타나게 하기
+            activeMoles = [true, true, true, true]; // 모든 두더지 활성화
+            
+            for (let i = 0; i < 4; i++) {
+                const textEl = document.getElementById(`mole-text-${i}`);
+                const moleEl = document.getElementById(`mole-${i}`);
+                
+                textEl.innerText = answers[i];
+                
+                // 이전 클래스 초기화
+                moleEl.classList.remove('correct');
+                moleEl.style.filter = "none";
+                
+                // 두더지 뿅 튀어나오기 (시간차를 살짝 줌)
+                setTimeout(() => {
+                    moleEl.classList.add('up');
+                }, i * 100); 
+            }
+            
+            isProcessing = false;
+        }
+
+        // 모든 두더지 숨기기
+        function hideAllMoles() {
+            for (let i = 0; i < 4; i++) {
+                document.getElementById(`mole-${i}`).classList.remove('up');
+            }
+        }
+
+        function showFeedback(text, isCorrect, event) {
+            const fb = document.createElement('div');
+            fb.innerText = text;
+            fb.className = `fixed font-bold text-5xl pointer-events-none z-[110] ${isCorrect ? 'text-blue-500' : 'text-red-500'}`;
+            
+            let x = window.innerWidth / 2;
+            let y = window.innerHeight / 2;
+
+            if (event) {
+                if (event.type.includes('touch') && event.changedTouches) {
+                    x = event.changedTouches[0].clientX;
+                    y = event.changedTouches[0].clientY;
+                } else if (event.clientX) {
+                    x = event.clientX;
+                    y = event.clientY;
+                }
+            }
+
+            fb.style.left = x + 'px';
+            fb.style.top = y + 'px';
+            fb.style.transform = 'translate(-50%, -50%)';
+            fb.style.animation = 'floatUp 1s ease-out forwards';
+            fb.style.textShadow = '3px 3px 0 #fff, -3px -3px 0 #fff, 3px -3px 0 #fff, -3px 3px 0 #fff'; 
+            
+            document.body.appendChild(fb);
+            
+            // 애니메이션이 끝나면 요소 제거
+            setTimeout(() => fb.remove(), 1000);
+        }
+
+        // 두더지 클릭(때리기) 처리
+        function hitMole(index, event) {
+            if (isProcessing || !activeMoles[index]) return;
+
+            const moleEl = document.getElementById(`mole-${index}`);
+            const textEl = document.getElementById(`mole-text-${index}`);
+            const clickedValue = parseInt(textEl.innerText);
+
+            if (clickedValue === currentAnswer) {
+                // 정답인 경우! 🟢
+                showFeedback('정답!', true, event);
+                
+                isProcessing = true; // 다른 두더지 클릭 방지
+                score += 10;
+                els.score.innerText = score;
+                
+                // 정답 두더지 시각적 효과 (파란색으로 변하며 신남)
+                moleEl.classList.add('correct');
+                
+                // 잠시 후 모든 두더지가 들어가고 다음 문제로
+                setTimeout(() => {
+                    hideAllMoles();
+                    
+                    setTimeout(() => {
+                        currentQuestion++;
+                        if (currentQuestion > MAX_QUESTIONS) {
+                            endGame();
+                        } else {
+                            els.qCurrent.innerText = currentQuestion;
+                            generateQuestion();
+                        }
+                    }, 400); // 들어가는 애니메이션 시간 대기
+                    
+                }, 800); // 정답 확인 시간 제공
+
+            } else {
+                // 오답인 경우! 🔴
+                showFeedback('다시 생각해봐!', false, event);
+                activeMoles[index] = false; // 이 두더지는 이제 클릭 안 됨
+                
+                // 시각적 피드백: 화면 흔들림
+                document.body.classList.add('shake');
+                setTimeout(() => document.body.classList.remove('shake'), 300);
+                
+                // 때린 두더지는 쏙 숨어버림 (흑백 처리 후 들어감)
+                moleEl.style.filter = "grayscale(80%)";
+                moleEl.classList.remove('up');
+                
+                // isProcessing을 막지 않아서 남은 두더지를 계속 클릭 가능함 (난이도 하 특징)
+            }
+        }
+
+        // 게임 시작
+        function startGame() {
+            screens.start.classList.add('hidden');
+            screens.result.classList.add('hidden');
+            screens.play.classList.remove('hidden', 'flex');
+            screens.play.classList.add('flex'); // hidden 해제 후 flex 적용
+            hammer.style.display = 'block'; // 뿅망치 표시
+
+            score = 0;
+            currentQuestion = 1;
+            els.score.innerText = score;
+            els.qCurrent.innerText = currentQuestion;
+            
+            generateQuestion();
+        }
+
+        // 게임 종료
+        function endGame() {
+            screens.play.classList.add('hidden');
+            screens.play.classList.remove('flex');
+            screens.result.classList.remove('hidden');
+            hammer.style.display = 'none'; // 뿅망치 숨기기
+            
+            els.finalScore.innerText = score;
+            els.finalScore.classList.remove('pop');
+            void els.finalScore.offsetWidth;
+            els.finalScore.classList.add('pop');
+        }
+
+        // 시작 화면으로 돌아가기
+        function resetToStart() {
+            screens.result.classList.add('hidden');
+            screens.start.classList.remove('hidden');
+            hammer.style.display = 'none'; // 뿅망치 숨기기
+        }
+    </script>
+</body>
+</html>
